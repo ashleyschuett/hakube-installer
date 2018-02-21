@@ -52,6 +52,11 @@ sudo tee /etc/kubernetes/pki/etcd/server-key.pem > /dev/null <<EOF
 EOF
 sudo chmod 600 /etc/kubernetes/pki/etcd/server-key.pem
 
+
+{% if disable_ssh %}
+## install kubeadm CA certificate
+{% include "fragments/kubeadm-certs.sh.j2" %}
+{% else %}
 # install ssh keys
 sudo tee $HOME/.ssh/id_rsa.pub > /dev/null <<EOF
 {% include cluster["sshKeysDir"] + "/" + master_name + "_rsa.pub" %}
@@ -64,7 +69,7 @@ sudo chmod 600 $HOME/.ssh/id_rsa
 #
 # allow master peers ssh access
 #
-{% for master in cluster["masters"] %}
+{%- for master in cluster["masters"] %}
 tee -a $HOME/.ssh/authorized_keys > /dev/null <<EOF
 {% include cluster["sshKeysDir"] + "/" + master["nodeName"] + "_rsa.pub" %}
 EOF
@@ -73,6 +78,7 @@ EOF
 # allow peers to ssh/scp as root
 sudo mkdir -p /root/.ssh
 cat $HOME/.ssh/authorized_keys | sudo tee -a /root/.ssh/authorized_keys > /dev/null
+{% endif %}
 
 
 #
@@ -152,8 +158,7 @@ until etcdctl member list; do
     sleep 3
 done
 
-
-{% if master != cluster["masters"][0] %}
+{%- if not disable_ssh and master != cluster["masters"][0] %}
 # Wait for seed master to generate necessary certificates. This includes the
 # k8s ca cert, which must be used to sign kubeadm-generated apiserver certs.
 # https://github.com/kubernetes/kubeadm/blob/master/docs/design/design_v1.7.md
@@ -167,7 +172,6 @@ retrying_scp root@{{ cluster["masters"][0]["privateIP"] }} /etc/kubernetes/pki/f
 retrying_scp root@{{ cluster["masters"][0]["privateIP"] }} /etc/kubernetes/pki/front-proxy-client.crt
 retrying_scp root@{{ cluster["masters"][0]["privateIP"] }} /etc/kubernetes/pki/front-proxy-client.key
 {% endif %}
-
 
 #
 # Run kubeadm

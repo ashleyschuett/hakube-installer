@@ -18,6 +18,8 @@ MODULE_DIR = os.path.dirname(__file__)
 CREATE_CA_CERT_SH = os.path.join(MODULE_DIR, "create-ca-cert.sh")
 CREATE_CLIENT_CERT_SH = os.path.join(MODULE_DIR, "create-client-cert.sh")
 CREATE_SERVER_CERT_SH = os.path.join(MODULE_DIR, "create-server-cert.sh")
+CREATE_KUBEADM_CERT_SH = os.path.join(MODULE_DIR, "create-kubeadm-certs.sh")
+
 CLUSTER_TOKEN_FILENAME = "cluster.token"
 """File name (under output-dir) to where cluster token is written."""
 
@@ -60,6 +62,9 @@ CLUSTER_DEFAULTS = {
     # (Optional) Directory under assets dir where etcd certificates will
     # be written.
     "etcdPKIDir": "pki/etcd",
+    # (Optional) Directory under assets dir where kubeadm certificates will
+    # be written.
+    "PKIDir": "pki",
     # (Optional) The Common Name of the etcd CA cert.
     "etcdCACommonName": "etcd-ca",
     # (Optional) The Common Name of the etcd client cett.
@@ -194,6 +199,9 @@ class ClusterDefinition:
     def etcd_pki_dir(self):
         return os.path.join(self.assets_dir, self.spec["etcdPKIDir"])
 
+    def pki_dir(self):
+        return os.path.join(self.assets_dir, self.spec["PKIDir"])
+
     def ssh_keys_dir(self):
         return os.path.join(self.assets_dir, self.spec["sshKeysDir"])
 
@@ -294,7 +302,9 @@ class ClusterDefinition:
                 fail("{} does not appear to be installed".format(program))
 
 
-    def render(self, overwrite_secrets=False, overwrite_scripts=True):
+    def render(self, overwrite_secrets=False, overwrite_scripts=True, disable_ssh=False):
+        LOG.info("SSH Disabled = %r", disable_ssh)
+        LOG.info("overwrite_secrets = %r", overwrite_secrets)
         """Renders assets for all nodes in the cluster definition.
 
         :param overwrite_secrets: Set to `True` if existing secrets (token,
@@ -344,20 +354,26 @@ class ClusterDefinition:
                 if proc.returncode != 0:
                     fail("failed to generate etcd server cert: {}".format(proc.stdout))
 
-
-        os.makedirs(self.ssh_keys_dir(), exist_ok=True)
-        for node in self.all_nodes():
-            nodename = node["nodeName"]
-            if overwrite_secrets or not self.sshkey_rendered(nodename):
-                if self.sshkey_rendered(nodename):
-                    os.remove(self.ssh_privkey(nodename))
-                    os.remove(self.ssh_pubkey(nodename))
-                LOG.info("generating ssh key for %s ...", nodename)
-                cmd = "ssh-keygen -b 2048 -t rsa -N '' -f {ssh_dir}/{node}_rsa -C {user}@{node}".format(ssh_dir=self.ssh_keys_dir(), user=self.spec["sshLoginUser"], node=nodename)
-                proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                if proc.returncode != 0:
-                    fail("failed to generate ssh key: {}".format(proc.stdout))
-
+        if not disable_ssh:
+            os.makedirs(self.ssh_keys_dir(), exist_ok=True)
+            for node in self.all_nodes():
+                nodename = node["nodeName"]
+                if overwrite_secrets or not self.sshkey_rendered(nodename):
+                    if self.sshkey_rendered(nodename):
+                        os.remove(self.ssh_privkey(nodename))
+                        os.remove(self.ssh_pubkey(nodename))
+                    LOG.info("generating ssh key for %s ...", nodename)
+                    cmd = "ssh-keygen -b 2048 -t rsa -N '' -f {ssh_dir}/{node}_rsa -C {user}@{node}".format(ssh_dir=self.ssh_keys_dir(), user=self.spec["sshLoginUser"], node=nodename)
+                    proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    if proc.returncode != 0:
+                        fail("failed to generate ssh key: {}".format(proc.stdout))
+        elif overwrite_secrets or not self.kubeadm_rendered():
+            LOG.info("Kubeadm create all needed certs %s...", self.pki_dir())
+            cmd = "{script} --output-dir={outdir}".format(
+                script=CREATE_KUBEADM_CERT_SH, outdir=self.pki_dir())
+            proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            if proc.returncode != 0:
+                fail("failed to generate kubeadm certs: {}".format(proc.stdout))
 
         os.makedirs(self.scripts_dir(), exist_ok=True)
         env = Environment(loader=FileSystemLoader([TEMPLATES_DIR, self.assets_dir]))
@@ -372,7 +388,8 @@ class ClusterDefinition:
                         cluster=self.spec,
                         cluster_token=self.cluster_token,
                         master_name=nodename,
-                        master=master
+                        master=master,
+                        disable_ssh=disable_ssh
                     ))
 
         env = Environment(loader=FileSystemLoader([TEMPLATES_DIR, self.assets_dir]))

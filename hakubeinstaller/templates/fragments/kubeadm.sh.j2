@@ -1,5 +1,4 @@
 ## start: kubeadm.sh
-
 # swap must be disabled for kubelet to work properly
 sudo swapoff -a
 
@@ -30,13 +29,10 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 
-{% if cluster["hooks"].get("cloudProviderConfig") %}
+{%- if cluster["hooks"].get("cloudProviderConfig") %}
 # Add cloud-provider config (if one is required by the cloudprovider)
 sudo tee /etc/kubernetes/cloud-config.json > /dev/null <<EOF
 {% include "hooks/cloudconfig/" + cluster["hooks"].get("cloudProviderConfig") %}
 EOF
 {% endif %}
-
-
-
 ## end: kubeadm.sh

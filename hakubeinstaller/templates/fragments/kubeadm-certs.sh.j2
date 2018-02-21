@@ -1,0 +1,28 @@
+## install kubeadm CA certificate
+sudo tee /etc/kubernetes/pki/ca.crt > /dev/null <<EOF
+{% include cluster["PKIDir"] + "/ca.pem" %}
+EOF
+sudo tee /etc/kubernetes/pki/ca.key > /dev/null <<EOF
+{% include cluster["PKIDir"] + "/ca-key.pem" %}
+EOF
+
+sudo tee /etc/kubernetes/pki/front-proxy-ca.crt > /dev/null <<EOF
+{% include cluster["PKIDir"] + "/front-proxy-ca.pem" %}
+EOF
+sudo tee /etc/kubernetes/pki/front-proxy-ca.key > /dev/null <<EOF
+{% include cluster["PKIDir"] + "/front-proxy-ca-key.pem" %}
+EOF
+
+sudo tee /etc/kubernetes/pki/front-proxy-client.crt > /dev/null <<EOF
+{% include cluster["PKIDir"] + "/front-proxy-client.pem" %}
+EOF
+sudo tee /etc/kubernetes/pki/front-proxy-client.key > /dev/null <<EOF
+{% include cluster["PKIDir"] + "/front-proxy-client-key.pem" %}
+EOF
+
+sudo tee /etc/kubernetes/pki/sa.pub > /dev/null <<EOF
+{% include cluster["PKIDir"] + "/sa.pub" %}
+EOF
+sudo tee /etc/kubernetes/pki/sa.key > /dev/null <<EOF
+{% include cluster["PKIDir"] + "/sa.key" %}
+EOF

@@ -21,7 +21,8 @@ def render(args):
     clusterdef = cluster.ClusterDefinition(cluster_path, assets_dir)
     clusterdef.render(
         overwrite_secrets=args.overwrite_secrets,
-        overwrite_scripts=args.overwrite_scripts)
+        overwrite_scripts=args.overwrite_scripts,
+        disable_ssh=args.disable_ssh)
 
 
 def install(args):
@@ -53,8 +54,8 @@ def cli():
         default="assets", help="Directory to which cluster scripts and certs "
         "will be written. Default: assets")
     parser_render.add_argument(
-        "--overwrite-secrets", dest="overwrite_secrets", action="store_true",
-        default=False,
+        "--overwrite-secrets", dest="overwrite_secrets",
+        action="store_true", default=False,
         help="Set if existing secrets (certs and keys) in the assets dir "
         "are to be overwritten. Default behavior: don't overwrite.")
     parser_render.add_argument(
@@ -62,6 +63,10 @@ def cli():
         action="store_false", default=True,
         help="Set if existing boot scripts in the assets dir are NOT to be "
         "overwritten. Default behavior: overwrite.")
+    parser_render.add_argument(
+        "--disable-ssh", dest="disable_ssh",
+        action="store_true", default=False,
+        help="Set if you do not want master nodes to have ssh access to each other")
     parser_render.set_defaults(handler=render)
 
     parser_install = subparsers.add_parser(
